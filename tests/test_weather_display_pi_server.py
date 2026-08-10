@@ -22,47 +22,45 @@ def test_ruuvi_sensor_configs_include_all_expected_sensors():
     ]
 
 
-def test_collect_ruuvi_state_uses_sensor_label_and_mac():
+def test_collect_ruuvi_state_reads_visible_sensors_and_labels_known_macs():
     service = module.DashboardService()
     calls = []
 
-    expected_values = {
-        'F5:F5:9A:56:D1:4F': {
+    async def fake_get_data_async(macs):
+        calls.append(macs)
+        yield ('F5:F5:9A:56:D1:4F', {
             'temperature': 12.3,
             'humidity': 41.2,
             'pressure': 1012.0,
             'battery': 88,
-        },
-        'DC:7A:39:53:77:91': {
+        })
+        yield ('AA:BB:CC:DD:EE:FF', {
+            'temperature': 18.9,
+            'humidity': 48.0,
+            'pressure': 1004.4,
+            'battery': 63,
+        })
+        yield ('DC:7A:39:53:77:91', {
             'temperature': 9.1,
             'humidity': 55.0,
             'pressure': 1001.2,
             'battery': 74,
-        },
-    }
-
-    async def fake_get_data_async(macs):
-        assert len(macs) == 1
-        mac = macs[0]
-        calls.append(mac)
-        if mac == 'C1:33:99:C1:3E:79':
-            raise RuntimeError('sensor offline')
-        yield (mac, expected_values[mac])
+        })
 
     with patch.object(dashboard_service_module, 'RuuviTagSensor', create=True) as ruuvi_sensor:
         ruuvi_sensor.get_data_async = fake_get_data_async
         state = asyncio.run(service._collect_ruuvi_state())
 
-    assert calls == [mac for _, mac in module.RUUVITAG_SENSORS]
-    assert state['status'] == 'Partial sensor data'
+    assert calls == [[]]
+    assert state['status'] == 'Live sensor'
     assert state['sensor_name'] == 'Makuuhuone'
     assert state['mac'] == 'F5:F5:9A:56:D1:4F'
     assert len(state['sensors']) == 3
     assert state['sensors'][0]['name'] == 'Makuuhuone'
-    assert state['sensors'][1]['name'] == 'Keittiö'
-    assert state['sensors'][1]['temperature'] == '--'
-    assert state['sensors'][2]['name'] == 'Terassi'
-    assert state['sensors'][2]['temperature'] == '9.1'
+    assert state['sensors'][1]['name'] == 'Terassi'
+    assert state['sensors'][1]['temperature'] == '9.1'
+    assert state['sensors'][2]['name'] == 'AA:BB:CC:DD:EE:FF'
+    assert state['sensors'][2]['temperature'] == '18.9'
 
 
 def test_dashboard_page_uses_header_panel_without_signal_section():
