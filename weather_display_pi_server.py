@@ -1,7 +1,7 @@
 import os
 from http.server import ThreadingHTTPServer
 
-from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSORS, RuuviTagSensor
+from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSOR, RUUVITAG_SENSOR_MAC, RUUVITAG_SENSOR_NAME, RUUVITAG_SENSORS, RuuviTagSensor
 from pidisplay.services.dashboard_service import DashboardService
 from pidisplay.services.transit_service import TransitService
 from pidisplay.web.handler import DashboardHandler, set_services

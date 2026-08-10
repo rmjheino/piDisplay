@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime
 
-from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSORS, RuuviTagSensor
+from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSOR, RUUVITAG_SENSOR_MAC, RUUVITAG_SENSOR_NAME, RuuviTagSensor
 
 
 class DashboardService:
@@ -86,16 +86,15 @@ class DashboardService:
             self._state = state
 
     async def _collect_ruuvi_state(self) -> dict:
-        sensor_rows = await self._collect_sensor_rows()
-        if not sensor_rows:
-            self._log_ruuvi("No sensor readings received from any configured sensor")
+        sensor_row = await self._collect_sensor_row()
+        if not sensor_row:
+            self._log_ruuvi("No sensor reading received from Makuuhuone")
             return {}
 
-        successful_reads = sum(1 for row in sensor_rows if row["temperature"] != "--")
-        status = "Live sensor" if successful_reads == len(RUUVITAG_SENSORS) else "Partial sensor data"
-        signal = "OK" if successful_reads == len(RUUVITAG_SENSORS) else "Degraded"
-        self._log_ruuvi(f"Collected {successful_reads}/{len(RUUVITAG_SENSORS)} sensor readings")
-        self._log_ruuvi(f"Sensor rows ready for HTML: {len(sensor_rows)}")
+        successful_reads = 1 if sensor_row["temperature"] != "--" else 0
+        status = "Live sensor" if successful_reads else "Sensor unavailable"
+        signal = "OK" if successful_reads else "Unavailable"
+        self._log_ruuvi("Collected Makuuhuone sensor reading")
 
         return {
             "status": status,
@@ -105,27 +104,25 @@ class DashboardService:
             "pressure": "--",
             "battery": "--",
             "signal": signal,
-            "mac": "--",
-            "sensor_name": "--",
-            "sensors": sensor_rows,
+            "mac": sensor_row["mac"],
+            "sensor_name": sensor_row["name"],
+            "sensors": [sensor_row],
         }
 
-    async def _collect_sensor_rows(self) -> list[dict]:
-        sensor_rows: list[dict] = []
+    async def _collect_sensor_row(self) -> dict | None:
         if RuuviTagSensor is None:
-            return sensor_rows
+            return None
 
-        macs = [mac for _, mac in RUUVITAG_SENSORS]
-        self._log_ruuvi(f"Reading {len(macs)} sensors in one BLE scan")
+        self._log_ruuvi(f"Reading {RUUVITAG_SENSOR_NAME} ({RUUVITAG_SENSOR_MAC})")
 
         try:
-            async for found_data in RuuviTagSensor.get_data_async(macs):
+            async for found_data in RuuviTagSensor.get_data_async([RUUVITAG_SENSOR_MAC]):
                 if not isinstance(found_data, (tuple, list)) or len(found_data) != 2:
                     self._log_ruuvi(f"Malformed reading: {found_data!r}")
                     continue
 
                 found_mac, payload = found_data
-                if found_mac not in macs:
+                if found_mac != RUUVITAG_SENSOR_MAC:
                     self._log_ruuvi(f"Ignoring unexpected MAC {found_mac}")
                     continue
 
@@ -133,39 +130,32 @@ class DashboardService:
                     self._log_ruuvi(f"Missing payload for {found_mac}")
                     continue
 
-                sensor_name = next((name for name, configured_mac in RUUVITAG_SENSORS if configured_mac == found_mac), found_mac)
-                self._log_ruuvi(f"Read OK {sensor_name} ({found_mac})")
-                sensor_rows.append(
-                    {
-                        "name": sensor_name,
-                        "temperature": self._format_value(payload.get("temperature")),
-                        "humidity": self._format_value(payload.get("humidity")),
-                        "pressure": self._format_value(payload.get("pressure")),
-                        "battery": self._format_value(payload.get("battery")),
-                        "mac": found_mac,
-                    }
-                )
+                sensor_row = {
+                    "name": RUUVITAG_SENSOR_NAME,
+                    "temperature": self._format_value(payload.get("temperature")),
+                    "humidity": self._format_value(payload.get("humidity")),
+                    "pressure": self._format_value(payload.get("pressure")),
+                    "battery": self._format_value(payload.get("battery")),
+                    "mac": found_mac,
+                }
+                self._log_ruuvi(f"Read OK {sensor_row['name']} ({found_mac})")
+                return sensor_row
         except Exception as exc:
             self._log_ruuvi(f"Scan error: {exc}")
 
-        if sensor_rows:
-            sensor_rows.sort(key=lambda row: next(index for index, (_, mac) in enumerate(RUUVITAG_SENSORS) if mac == row["mac"]))
-
-        return sensor_rows
+        return None
 
     def _build_unavailable_state(self) -> dict:
-        sensors = []
-        for name, mac in RUUVITAG_SENSORS:
-            sensors.append(
-                {
-                    "name": name,
-                    "temperature": "--",
-                    "humidity": "--",
-                    "pressure": "--",
-                    "battery": "--",
-                    "mac": mac,
-                }
-            )
+        sensors = [
+            {
+                "name": RUUVITAG_SENSOR_NAME,
+                "temperature": "--",
+                "humidity": "--",
+                "pressure": "--",
+                "battery": "--",
+                "mac": RUUVITAG_SENSOR_MAC,
+            }
+        ]
 
         return {
             "status": "Sensor unavailable",
