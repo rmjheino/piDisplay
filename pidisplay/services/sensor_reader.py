@@ -57,7 +57,7 @@ class SensorReader:
         while not self._stop_event.is_set():
             run_started = time.monotonic()
             try:
-                RuuviTagSensor.listen(self._handle_data)
+                RuuviTagSensor.get_data(self._handle_data)
                 self._log_ruuvi("listen() returned unexpectedly; restarting")
             except Exception as exc:
                 self._log_ruuvi(f"Scan error: {exc}; retrying in {backoff:.0f}s")
