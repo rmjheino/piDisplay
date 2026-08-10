@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PIDisplay Dashboard</title>
+  <style>
+{{ DASHBOARD_CSS }}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="grid">
+      <section class="panel header-panel">
+        <div class="time-box">
+          <div class="tag">Live clock</div>
+          <div id="clock" class="clock">--:--:--</div>
+          <div id="date" class="date">--</div>
+        </div>
+      </section>
+      <section class="panel departures-panel">
+        <div class="panel-header-row">
+          <div class="tag">Next departures</div>
+          <h3>Merisotilaantori</h3>
+          <img class="hsl-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
+        </div>
+        <div class="transit-table">
+          <div class="transit-row transit-head">
+            <span>Leave from home</span>
+          </div>
+          <div id="transit-list" class="transit-table-body">
+            <p class="muted transit-fallback">Loading…</p>
+          </div>
+        </div>
+        <p id="transit-updated" class="muted"></p>
+      </section>
+      <section class="panel forecast-panel">
+        <div>
+          <div class="tag">Helsinki forecast</div>
+          <h3>Weather</h3>
+        </div>
+        <div id="weather-forecast" class="weather-hours">
+          <p class="muted">Loading…</p>
+        </div>
+      </section>
+      <section class="panel sensor-panel">
+        <div class="sensor-grid" id="sensor-table-body">
+          <div class="sensor-card sensor-card-placeholder">
+            <h3>Loading sensors…</h3>
+            <div class="sensor-values">
+              <div><span class="sensor-value">--</span></div>
+              <div><span class="sensor-value">--</span></div>
+              <div><span class="sensor-value">--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>
+    const elements = {
+      clock: document.getElementById('clock'),
+      date: document.getElementById('date'),
+      sensorTableBody: document.getElementById('sensor-table-body'),
+      weatherForecast: document.getElementById('weather-forecast')
+    };
+
+    function updateClock() {
+      const now = new Date();
+      elements.clock.textContent = now.toLocaleTimeString('en-GB');
+      elements.date.textContent = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function renderSensorRows(sensors) {
+      if (!elements.sensorTableBody) {
+        return;
+      }
+      const cards = (sensors || []).slice(0, 3).map((sensor) => {
+        const name = sensor.name || '--';
+        const temperature = sensor.temperature || '--';
+        const humidity = sensor.humidity || '--';
+        const pressure = sensor.pressure || '--';
+        return `
+          <section class="sensor-card">
+            <h3>${name}</h3>
+            <div class="sensor-values">
+              <div><span class="sensor-value">${temperature}</span></div>
+              <div><span class="sensor-value">${humidity}</span></div>
+              <div><span class="sensor-value">${pressure}</span></div>
+            </div>
+          </section>
+        `;
+      }).join('');
+      elements.sensorTableBody.innerHTML = cards || '<div class="sensor-card sensor-card-placeholder"><h3>No sensors</h3><div class="sensor-values"><div><span class="sensor-value">--</span></div><div><span class="sensor-value">--</span></div><div><span class="sensor-value">--</span></div></div></div>';
+    }
+
+    function renderWeather(hours) {
+      if (!elements.weatherForecast) {
+        return;
+      }
+      if (!hours || !hours.length) {
+        elements.weatherForecast.innerHTML = '<p class="muted">Unavailable</p>';
+        return;
+      }
+      const html = hours.map((hour) => `
+        <div class="weather-hour">
+          <span class="time">${hour.time || '--'}</span>
+          <span>${hour.temperature || '--'}</span>
+          <span>${hour.chance_of_rain || '--'}</span>
+        </div>
+      `).join('');
+      elements.weatherForecast.innerHTML = html;
+    }
+
+    function updateDashboard(data) {
+      renderSensorRows(data.sensors || []);
+      renderWeather(data.weather && data.weather.hours ? data.weather.hours : []);
+    }
+
+    async function refreshData() {
+      try {
+        const response = await fetch('/api/data');
+        const data = await response.json();
+        updateDashboard(data);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    updateClock();
+    refreshData();
+    setInterval(updateClock, 1000);
+    setInterval(refreshData, 3000);
+
+    function leaveHomeAt(departureTime, offsetMinutes = 4) {
+      const match = /^(\d{1,2}):(\d{2})$/.exec(String(departureTime || ''));
+      if (!match) {
+        return '--';
+      }
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return '--';
+      }
+      const minutesPerDay = 24 * 60;
+      const totalMinutes = (((hours * 60) + minutes - offsetMinutes) % minutesPerDay + minutesPerDay) % minutesPerDay;
+      const leaveHours = Math.floor(totalMinutes / 60);
+      const leaveMinutes = totalMinutes % 60;
+      return `${String(leaveHours).padStart(2, '0')}:${String(leaveMinutes).padStart(2, '0')}`;
+    }
+
+    async function fetchTransit() {
+      try {
+        const resp = await fetch('/api/transit');
+        const data = await resp.json();
+        const departures = data.departures;
+        const list = document.getElementById('transit-list');
+        if (data.status) {
+          list.innerHTML = `<p class="muted transit-fallback">${data.status}</p>`;
+        } else if (!departures.length) {
+          list.innerHTML = '<p class="muted transit-fallback">No departures available.</p>';
+        } else {
+          list.innerHTML = departures.map((a) => {
+            const departureTime = a.is_realtime ? a.realtime : a.scheduled;
+            const leaveTime = leaveHomeAt(departureTime, 4);
+            return `<div class="transit-row"><strong class="transit-time">${leaveTime}</strong></div>`;
+          }).join('');
+        }
+        document.getElementById('transit-updated').textContent =
+          'Updated ' + new Date().toLocaleTimeString('en-GB');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    fetchTransit();
+    setInterval(fetchTransit, 300000);
+  </script>
+</body>
+</html>
