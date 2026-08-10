@@ -20,6 +20,13 @@ except Exception:  # pragma: no cover - depends on runtime environment
     RUUVITAG_AVAILABLE = False
 
 
+RUUVITAG_SENSORS = [
+    ("Makuuhuone", "F5:F5:9A:56:D1:4F"),
+    ("Keittiö", "C1:33:99:C1:3E:79"),
+    ("Terassi", "DC:7A:39:53:77:91"),
+]
+
+
 class DashboardService:
     def __init__(self, refresh_seconds: int = 3) -> None:
         self.refresh_seconds = refresh_seconds
@@ -33,6 +40,8 @@ class DashboardService:
             "pressure": "--",
             "battery": "--",
             "signal": "--",
+            "sensor_name": "--",
+            "sensors": [],
         }
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -78,12 +87,18 @@ class DashboardService:
             self._state = state
 
     async def _collect_ruuvi_state(self) -> dict:
-        sensors = []
+        found_sensors = []
         try:
-            async for found_data in RuuviTagSensor.get_data_async(["F5:F5:9A:56:D1:4F"]):
+            macs = [mac for _, mac in RUUVITAG_SENSORS]
+            async for found_data in RuuviTagSensor.get_data_async(macs):
                 mac, payload = found_data
-                sensors.append(
+                sensor_name = next(
+                    (name for name, configured_mac in RUUVITAG_SENSORS if configured_mac == mac),
+                    "Unknown",
+                )
+                found_sensors.append(
                     {
+                        "name": sensor_name,
                         "mac": mac,
                         "temperature": payload.get("temperature", "--"),
                         "humidity": payload.get("humidity", "--"),
@@ -91,42 +106,69 @@ class DashboardService:
                         "battery": payload.get("battery", "--"),
                     }
                 )
-                if len(sensors) >= 1:
-                    break
         except Exception:
             return {}
 
-        if not sensors:
+        if not found_sensors:
             return {}
 
-        sensor = sensors[0]
+        sensors = []
+        for name, mac in RUUVITAG_SENSORS:
+            sensor = next((item for item in found_sensors if item.get("mac") == mac), None)
+            sensors.append(
+                {
+                    "name": name,
+                    "temperature": self._format_value(sensor.get("temperature")) if sensor else "--",
+                    "humidity": self._format_value(sensor.get("humidity")) if sensor else "--",
+                    "pressure": self._format_value(sensor.get("pressure")) if sensor else "--",
+                    "battery": self._format_value(sensor.get("battery")) if sensor else "--",
+                    "mac": sensor.get("mac", mac) if sensor else mac,
+                }
+            )
+
         return {
             "status": "Live sensor",
             "source": "ruuvi",
-            "temperature": self._format_value(sensor.get("temperature")),
-            "humidity": self._format_value(sensor.get("humidity")),
-            "pressure": self._format_value(sensor.get("pressure")),
-            "battery": self._format_value(sensor.get("battery")),
+            "temperature": "--",
+            "humidity": "--",
+            "pressure": "--",
+            "battery": "--",
             "signal": "OK",
-            "mac": sensor.get("mac", "--"),
+            "mac": "--",
+            "sensor_name": "--",
+            "sensors": sensors,
         }
 
     def _build_demo_state(self) -> dict:
         now = datetime.now()
         seconds = int(now.strftime("%S"))
-        temperature = 21.4 + ((seconds % 7) - 3) * 0.2
-        humidity = 45.0 + ((seconds % 5) - 2) * 1.2
-        pressure = 1008.5 + ((seconds % 3) - 1) * 0.4
-        battery = 96.0 - (seconds % 6)
+        sensors = []
+        for index, (name, mac) in enumerate(RUUVITAG_SENSORS):
+            temperature = 21.4 + ((seconds + index) % 7 - 3) * 0.2
+            humidity = 45.0 + ((seconds + index) % 5 - 2) * 1.2
+            pressure = 1008.5 + ((seconds + index) % 3 - 1) * 0.4
+            battery = 96.0 - ((seconds + index) % 6)
+            sensors.append(
+                {
+                    "name": name,
+                    "temperature": f"{temperature:.1f} °C",
+                    "humidity": f"{humidity:.1f} %",
+                    "pressure": f"{pressure:.1f} hPa",
+                    "battery": f"{battery:.0f} %",
+                    "mac": mac,
+                }
+            )
         return {
             "status": "Demo mode",
             "source": "demo",
-            "temperature": f"{temperature:.1f} Â°C",
-            "humidity": f"{humidity:.1f} %",
-            "pressure": f"{pressure:.1f} hPa",
-            "battery": f"{battery:.0f} %",
+            "temperature": "--",
+            "humidity": "--",
+            "pressure": "--",
+            "battery": "--",
             "signal": "Simulated",
             "mac": "--",
+            "sensor_name": "--",
+            "sensors": sensors,
         }
 
     @staticmethod
@@ -329,13 +371,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
       justify-content: center;
     }
     .grid {
-      width: min(100%, 1200px);
+      width: min(100%, 1400px);
       height: min(100%, 1920px);
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
       gap: 1.5rem;
       flex: 1;
+    }
+    .header-panel {
+      grid-column: 1;
+      grid-row: 1;
+      min-height: 220px;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 2rem 2.4rem;
+    }
+    .sensor-panel {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    .departures-panel {
+      grid-column: 1;
+      grid-row: 2;
     }
     .panel {
       background: var(--panel);
@@ -376,12 +434,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
       gap: 0.6rem;
     }
     .clock {
-      font-size: clamp(2.6rem, 6vw, 4.8rem);
+      font-size: clamp(5.2rem, 10vw, 9.6rem);
       font-weight: 700;
       line-height: 1;
     }
     .date {
-      font-size: clamp(1.15rem, 2.2vw, 1.7rem);
+      font-size: clamp(2.1rem, 3.8vw, 3.1rem);
       color: var(--muted);
     }
     .list {
@@ -396,6 +454,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
       padding-top: 0.4rem;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       font-size: clamp(1rem, 1.7vw, 1.2rem);
+    }
+    .sensor-table {
+      display: grid;
+      gap: 0.65rem;
+      margin-top: 0.2rem;
+    }
+    .sensor-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr 1fr;
+      gap: 0.8rem;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 0.6rem;
+      font-size: clamp(1rem, 1.5vw, 1.16rem);
+    }
+    .sensor-head {
+      border-top: none;
+      padding-top: 0;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: clamp(0.8rem, 1.1vw, 0.92rem);
+      font-weight: 600;
     }
     .transit-table {
       display: grid;
@@ -421,6 +502,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
       font-weight: 600;
     }
     .transit-time {
+      font-size: clamp(1.2rem, 2.05vw, 1.45rem);
       font-weight: 700;
       text-align: left;
     }
@@ -432,9 +514,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     }
     @media (max-width: 900px) {
       .shell { padding: 1rem; }
-      .grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: repeat(4, minmax(180px, 1fr));
+      .header-panel {
+        min-height: auto;
       }
       .transit-row {
         gap: 0.6rem;
@@ -445,39 +526,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <body>
   <div class=\"shell\">
     <div class=\"grid\">
-      <section class=\"panel\">
-        <div>
-          <div class=\"tag\">Current data</div>
-          <h2>Sensor status</h2>
-          <div id=\"status\" class=\"value\">--</div>
-          <p id=\"source\" class=\"muted\">Initializingâ€¦</p>
-        </div>
-        <div class=\"list\">
-          <div><span>Temperature</span><strong id=\"temperature\">--</strong></div>
-          <div><span>Humidity</span><strong id=\"humidity\">--</strong></div>
-          <div><span>Pressure</span><strong id=\"pressure\">--</strong></div>
-        </div>
-      </section>
-      <section class=\"panel\">
+      <section class=\"panel header-panel\">
         <div class=\"time-box\">
           <div class=\"tag\">Live clock</div>
           <div id=\"clock\" class=\"clock\">--:--:--</div>
           <div id=\"date\" class=\"date\">--</div>
         </div>
       </section>
-      <section class=\"panel\">
-        <div>
-          <div class=\"tag\">Signal</div>
-          <h3>Connection quality</h3>
-          <div id=\"signal\" class=\"value\">--</div>
-        </div>
-        <div class=\"list\">
-          <div><span>Battery</span><strong id=\"battery\">--</strong></div>
-          <div><span>Last update</span><strong id=\"timestamp\">--</strong></div>
-          <div><span>Tag</span><strong id=\"mac\">--</strong></div>
-        </div>
-      </section>
-      <section class=\"panel\">
+      <section class=\"panel departures-panel\">
         <div>
           <div class=\"tag\">Next departures</div>
           <h3>Merisotilaantori</h3>
@@ -493,21 +549,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         </div>
         <p id=\"transit-updated\" class=\"muted\"></p>
       </section>
+      <section class=\"panel sensor-panel\">
+        <div class=\"sensor-table\">
+          <div class=\"sensor-row sensor-head\">
+            <span>Sensor</span>
+            <span>Temperature</span>
+            <span>Humidity</span>
+            <span>Pressure</span>
+          </div>
+          <div id=\"sensor-table-body\"></div>
+        </div>
+      </section>
     </div>
   </div>
   <script>
     const elements = {
-      status: document.getElementById('status'),
-      source: document.getElementById('source'),
-      temperature: document.getElementById('temperature'),
-      humidity: document.getElementById('humidity'),
-      pressure: document.getElementById('pressure'),
-      signal: document.getElementById('signal'),
-      battery: document.getElementById('battery'),
-      timestamp: document.getElementById('timestamp'),
-      mac: document.getElementById('mac'),
       clock: document.getElementById('clock'),
-      date: document.getElementById('date')
+      date: document.getElementById('date'),
+      sensorTableBody: document.getElementById('sensor-table-body')
     };
 
     function updateClock() {
@@ -516,16 +575,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
       elements.date.textContent = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     }
 
+    function renderSensorRows(sensors) {
+      if (!elements.sensorTableBody) {
+        return;
+      }
+      const rows = (sensors || []).map((sensor) => {
+        const name = sensor.name || '--';
+        const temperature = sensor.temperature || '--';
+        const humidity = sensor.humidity || '--';
+        const pressure = sensor.pressure || '--';
+        return `<div class="sensor-row"><span>${name}</span><span>${temperature}</span><span>${humidity}</span><span>${pressure}</span></div>`;
+      }).join('');
+      elements.sensorTableBody.innerHTML = rows;
+    }
+
     function updateDashboard(data) {
-      elements.status.textContent = data.status || '--';
-      elements.source.textContent = data.source ? `Source: ${data.source}` : 'Source: unknown';
-      elements.temperature.textContent = data.temperature || '--';
-      elements.humidity.textContent = data.humidity || '--';
-      elements.pressure.textContent = data.pressure || '--';
-      elements.signal.textContent = data.signal || '--';
-      elements.battery.textContent = data.battery || '--';
-      elements.timestamp.textContent = data.timestamp || '--';
-      elements.mac.textContent = data.mac || '--';
+      renderSensorRows(data.sensors || []);
     }
 
     async function refreshData() {
