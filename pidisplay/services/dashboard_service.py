@@ -1,12 +1,13 @@
 import asyncio
 import threading
+import time
 from datetime import datetime
 
 from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSORS, RuuviTagSensor
 
 
 class DashboardService:
-    def __init__(self, refresh_seconds: int = 3) -> None:
+    def __init__(self, refresh_seconds: int = 10) -> None:
         self.refresh_seconds = refresh_seconds
         self._async_loop: asyncio.AbstractEventLoop | None = None
         self._state = {
@@ -45,9 +46,12 @@ class DashboardService:
         self._async_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._async_loop)
         try:
+            next_run = time.monotonic()
             while not self._stop_event.is_set():
                 self._refresh_state()
-                self._stop_event.wait(self.refresh_seconds)
+                next_run += self.refresh_seconds
+                sleep_for = max(0.0, next_run - time.monotonic())
+                self._stop_event.wait(sleep_for)
         finally:
             self._async_loop.close()
             self._async_loop = None
