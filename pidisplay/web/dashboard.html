@@ -13,7 +13,6 @@
     <div class="grid">
       <section class="panel header-panel">
         <div class="time-box">
-          <div class="tag">Live clock</div>
           <div id="clock" class="clock">--:--:--</div>
           <div id="date" class="date">--</div>
         </div>
@@ -44,15 +43,15 @@
         </div>
       </section>
       <section class="panel sensor-panel">
-        <div class="sensor-grid" id="sensor-table-body">
-          <div class="sensor-card sensor-card-placeholder">
+        <div class="sensor-sections" id="sensor-table-body">
+          <section class="sensor-section sensor-section-placeholder">
             <h3>Loading sensors…</h3>
             <div class="sensor-values">
-              <div><span class="sensor-value">--</span></div>
-              <div><span class="sensor-value">--</span></div>
-              <div><span class="sensor-value">--</span></div>
+              <div class="sensor-value">--</div>
+              <div class="sensor-value">--</div>
+              <div class="sensor-value">--</div>
             </div>
-          </div>
+          </section>
         </div>
       </section>
     </div>
@@ -75,23 +74,32 @@
       if (!elements.sensorTableBody) {
         return;
       }
-      const cards = (sensors || []).slice(0, 3).map((sensor) => {
+      const sections = (sensors || []).slice(0, 3).map((sensor) => {
         const name = sensor.name || '--';
         const temperature = sensor.temperature || '--';
         const humidity = sensor.humidity || '--';
         const pressure = sensor.pressure || '--';
         return `
-          <section class="sensor-card">
+          <section class="sensor-section">
             <h3>${name}</h3>
             <div class="sensor-values">
-              <div><span class="sensor-value">${temperature}</span></div>
-              <div><span class="sensor-value">${humidity}</span></div>
-              <div><span class="sensor-value">${pressure}</span></div>
+              <div class="sensor-value">${temperature}</div>
+              <div class="sensor-value">${humidity}</div>
+              <div class="sensor-value">${pressure}</div>
             </div>
           </section>
         `;
       }).join('');
-      elements.sensorTableBody.innerHTML = cards || '<div class="sensor-card sensor-card-placeholder"><h3>No sensors</h3><div class="sensor-values"><div><span class="sensor-value">--</span></div><div><span class="sensor-value">--</span></div><div><span class="sensor-value">--</span></div></div></div>';
+      elements.sensorTableBody.innerHTML = sections || `
+        <section class="sensor-section sensor-section-placeholder">
+          <h3>No sensors</h3>
+          <div class="sensor-values">
+            <div class="sensor-value">--</div>
+            <div class="sensor-value">--</div>
+            <div class="sensor-value">--</div>
+          </div>
+        </section>
+      `;
     }
 
     function renderWeather(hours) {
