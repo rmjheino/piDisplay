@@ -4,16 +4,19 @@ from urllib.parse import urlparse
 
 from pidisplay.services.sensor_reader import SensorReader
 from pidisplay.services.transit_service import TransitService
+from pidisplay.services.weather_service import WeatherService
 from pidisplay.web.template import build_dashboard_page
 
 _service: SensorReader | None = None
 _transit_service: TransitService | None = None
+_weather_service: WeatherService | None = None
 
 
-def set_services(service: SensorReader, transit_service: TransitService) -> None:
-    global _service, _transit_service
+def set_services(service: SensorReader, transit_service: TransitService, weather_service: WeatherService | None = None) -> None:
+    global _service, _transit_service, _weather_service
     _service = service
     _transit_service = transit_service
+    _weather_service = weather_service
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -28,7 +31,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/data":
-            self._send_json(_service.get_state())
+            payload = _service.get_state()
+            if _weather_service is not None:
+                payload["weather"] = _weather_service.get_state()
+            self._send_json(payload)
         elif parsed.path == "/api/transit":
             self._send_json({"departures": _transit_service.get_departures(), "status": _transit_service.get_status()})
         else:

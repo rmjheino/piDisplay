@@ -94,6 +94,42 @@ def build_dashboard_page() -> str:
       flex-direction: column;
       gap: 0.6rem;
     }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1.5rem;
+      width: 100%;
+    }
+    .weather-block {
+      min-width: 340px;
+      padding: 1rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .weather-hours {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.7rem;
+    }
+    .weather-hour {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.7rem 0.4rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      font-size: clamp(1.1rem, 1.9vw, 1.5rem);
+    }
+    .weather-hour .time {
+      color: var(--accent);
+      font-weight: 600;
+    }
     .clock {
       font-size: clamp(5.2rem, 10vw, 9.6rem);
       font-weight: 700;
@@ -188,10 +224,18 @@ def build_dashboard_page() -> str:
   <div class=\"shell\">
     <div class=\"grid\">
       <section class=\"panel header-panel\">
-        <div class=\"time-box\">
-          <div class=\"tag\">Live clock</div>
-          <div id=\"clock\" class=\"clock\">--:--:--</div>
-          <div id=\"date\" class=\"date\">--</div>
+        <div class=\"header-content\">
+          <div class=\"time-box\">
+            <div class=\"tag\">Live clock</div>
+            <div id=\"clock\" class=\"clock\">--:--:--</div>
+            <div id=\"date\" class=\"date\">--</div>
+          </div>
+          <div class=\"weather-block\">
+            <div class=\"tag\">Helsinki forecast</div>
+            <div id=\"weather-forecast\" class=\"weather-hours\">
+              <p class=\"muted\">Loading…</p>
+            </div>
+          </div>
         </div>
       </section>
       <section class=\"panel departures-panel\">
@@ -227,7 +271,8 @@ def build_dashboard_page() -> str:
     const elements = {
       clock: document.getElementById('clock'),
       date: document.getElementById('date'),
-      sensorTableBody: document.getElementById('sensor-table-body')
+      sensorTableBody: document.getElementById('sensor-table-body'),
+      weatherForecast: document.getElementById('weather-forecast')
     };
 
     function updateClock() {
@@ -250,8 +295,27 @@ def build_dashboard_page() -> str:
       elements.sensorTableBody.innerHTML = rows;
     }
 
+    function renderWeather(hours) {
+      if (!elements.weatherForecast) {
+        return;
+      }
+      if (!hours || !hours.length) {
+        elements.weatherForecast.innerHTML = '<p class="muted">Unavailable</p>';
+        return;
+      }
+      const html = hours.map((hour) => `
+        <div class="weather-hour">
+          <span class="time">${hour.time || '--'}</span>
+          <span>${hour.temperature || '--'}</span>
+          <span>${hour.chance_of_rain || '--'}</span>
+        </div>
+      `).join('');
+      elements.weatherForecast.innerHTML = html;
+    }
+
     function updateDashboard(data) {
       renderSensorRows(data.sensors || []);
+      renderWeather(data.weather && data.weather.hours ? data.weather.hours : []);
     }
 
     async function refreshData() {

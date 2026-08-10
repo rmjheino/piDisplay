@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer
 from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSOR, RUUVITAG_SENSOR_MAC, RUUVITAG_SENSOR_NAME, RUUVITAG_SENSORS, RuuviTagSensor
 from pidisplay.services.sensor_reader import SensorReader
 from pidisplay.services.transit_service import TransitService
+from pidisplay.services.weather_service import WeatherService
 from pidisplay.web.handler import DashboardHandler, set_services
 
 
@@ -24,10 +25,12 @@ transit_service = TransitService(
     stop_id=os.environ.get("TRANSIT_STOP_ID", ""),
     api_key=os.environ.get("DIGITRANSIT_API_KEY", ""),
 )
-set_services(service, transit_service)
+weather_service = WeatherService()
+set_services(service, transit_service, weather_service)
 
 
 if __name__ == "__main__":
     service.start()
     transit_service.start()
+    weather_service.start()
     main()
