@@ -502,7 +502,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
       font-weight: 600;
     }
     .transit-time {
-      font-size: clamp(1.2rem, 2.05vw, 1.45rem);
+      font-size: clamp(2.4rem, 4.1vw, 2.9rem);
       font-weight: 700;
       text-align: left;
     }
