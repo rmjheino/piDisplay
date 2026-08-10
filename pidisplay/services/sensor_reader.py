@@ -1,4 +1,3 @@
-import asyncio
 import threading
 import time
 from datetime import datetime
@@ -7,15 +6,17 @@ from pidisplay.config import RUUVITAG_AVAILABLE, RUUVITAG_SENSORS, RuuviTagSenso
 
 _MIN_BACKOFF_SECONDS = 1.0
 _MAX_BACKOFF_SECONDS = 60.0
+_STABLE_RUN_SECONDS = 30.0
 
 
-class DashboardService:
-    """Keeps a single long-lived BLE scan running and serves the latest cached readings.
+class SensorReader:
+    """Reads RuuviTag sensor broadcasts and serves the latest cached readings.
 
-    A previous version restarted the RuuviTag BLE scan on every refresh cycle, which
-    raced with BlueZ's discovery teardown and surfaced as org.bluez.Error.InProgress.
-    This version starts exactly one scan for the service's lifetime; HTTP reads only
-    ever consult the in-memory cache, never touch BLE.
+    Uses the blocking RuuviTagSensor.listen() API, called once per retry attempt and
+    never concurrently, so BlueZ only ever has one discovery session in flight at a
+    time (the previous cyclic start/stop design raced with BlueZ teardown and
+    surfaced as org.bluez.Error.InProgress). HTTP reads only consult the in-memory
+    cache and never touch BLE.
     """
 
     def __init__(self, stale_after_seconds: int = 45) -> None:
@@ -26,8 +27,6 @@ class DashboardService:
 
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._task: asyncio.Task | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -38,10 +37,10 @@ class DashboardService:
 
     def stop(self) -> None:
         self._stop_event.set()
-        if self._loop is not None and self._task is not None:
-            self._loop.call_soon_threadsafe(self._task.cancel)
+        # listen() blocks and can't be interrupted mid-call; the daemon thread is
+        # reclaimed on process exit even if join() times out here.
         if self._thread:
-            self._thread.join(timeout=5)
+            self._thread.join(timeout=2)
 
     def get_state(self) -> dict:
         with self._lock:
@@ -50,49 +49,25 @@ class DashboardService:
         return self._build_state(cache, has_ever_read)
 
     def _run_loop(self) -> None:
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-        try:
-            self._task = self._loop.create_task(self._scan_forever())
-            self._loop.run_until_complete(self._task)
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self._loop.close()
-            self._loop = None
-            self._task = None
-            asyncio.set_event_loop(None)
-
-    async def _scan_forever(self) -> None:
         if not RUUVITAG_AVAILABLE:
             self._log_ruuvi("ruuvitag_sensor is not available in this environment")
             return
 
         backoff = _MIN_BACKOFF_SECONDS
         while not self._stop_event.is_set():
-            stream = None
+            run_started = time.monotonic()
             try:
-                stream = RuuviTagSensor.get_data_async([])
-                async for found_data in stream:
-                    self._handle_reading(found_data)
-                    backoff = _MIN_BACKOFF_SECONDS
-                # Stream ended on its own; treat like an error and retry below.
-                self._log_ruuvi("Scan stream ended unexpectedly; restarting")
-            except asyncio.CancelledError:
-                raise
+                RuuviTagSensor.listen(self._handle_data)
+                self._log_ruuvi("listen() returned unexpectedly; restarting")
             except Exception as exc:
                 self._log_ruuvi(f"Scan error: {exc}; retrying in {backoff:.0f}s")
-            finally:
-                if stream is not None:
-                    await stream.aclose()
 
-            try:
-                await asyncio.sleep(backoff)
-            except asyncio.CancelledError:
-                raise
-            backoff = min(backoff * 2, _MAX_BACKOFF_SECONDS)
+            ran_for = time.monotonic() - run_started
+            backoff = _MIN_BACKOFF_SECONDS if ran_for > _STABLE_RUN_SECONDS else min(backoff * 2, _MAX_BACKOFF_SECONDS)
+            if self._stop_event.wait(backoff):
+                break
 
-    def _handle_reading(self, found_data: object) -> None:
+    def _handle_data(self, found_data: object) -> None:
         if not isinstance(found_data, (tuple, list)) or len(found_data) != 2:
             self._log_ruuvi(f"Malformed reading: {found_data!r}")
             return

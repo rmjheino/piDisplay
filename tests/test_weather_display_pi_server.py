@@ -1,4 +1,3 @@
-import asyncio
 import json
 import importlib.util
 from io import BytesIO
@@ -6,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pidisplay.web.handler import DashboardHandler, set_services
-from pidisplay.services import dashboard_service as dashboard_service_module
+from pidisplay.services import sensor_reader as sensor_reader_module
 
 module_path = Path(__file__).resolve().parents[1] / 'weather_display_pi_server.py'
 spec = importlib.util.spec_from_file_location('weather_display_pi_server', module_path)
@@ -23,28 +22,28 @@ def test_ruuvi_sensor_configs_include_all_expected_sensors():
 
 
 def test_get_state_labels_known_macs_and_surfaces_unknown_sensors():
-    service = module.DashboardService()
+    service = module.SensorReader()
 
-    service._handle_reading(('F5:F5:9A:56:D1:4F', {
+    service._handle_data(('F5:F5:9A:56:D1:4F', {
         'temperature': 12.3,
         'humidity': 41.2,
         'pressure': 1012.0,
         'battery': 88,
     }))
-    service._handle_reading(('AA:BB:CC:DD:EE:FF', {
+    service._handle_data(('AA:BB:CC:DD:EE:FF', {
         'temperature': 18.9,
         'humidity': 48.0,
         'pressure': 1004.4,
         'battery': 63,
     }))
-    service._handle_reading(('DC:7A:39:53:77:91', {
+    service._handle_data(('DC:7A:39:53:77:91', {
         'temperature': 9.1,
         'humidity': 55.0,
         'pressure': 1001.2,
         'battery': 74,
     }))
 
-    with patch.object(dashboard_service_module, 'RUUVITAG_AVAILABLE', True):
+    with patch.object(sensor_reader_module, 'RUUVITAG_AVAILABLE', True):
         state = service.get_state()
 
     assert state['status'] == 'Live sensor'
@@ -62,9 +61,9 @@ def test_get_state_labels_known_macs_and_surfaces_unknown_sensors():
 
 
 def test_get_state_marks_readings_stale_after_threshold():
-    service = module.DashboardService(stale_after_seconds=30)
+    service = module.SensorReader(stale_after_seconds=30)
 
-    service._handle_reading(('F5:F5:9A:56:D1:4F', {
+    service._handle_data(('F5:F5:9A:56:D1:4F', {
         'temperature': 12.3,
         'humidity': 41.2,
         'pressure': 1012.0,
@@ -73,7 +72,7 @@ def test_get_state_marks_readings_stale_after_threshold():
     with service._lock:
         service._latest['F5:F5:9A:56:D1:4F']['last_seen'] -= 60
 
-    with patch.object(dashboard_service_module, 'RUUVITAG_AVAILABLE', True):
+    with patch.object(sensor_reader_module, 'RUUVITAG_AVAILABLE', True):
         state = service.get_state()
 
     assert state['status'] == 'Stale'
@@ -81,58 +80,39 @@ def test_get_state_marks_readings_stale_after_threshold():
     assert makuuhuone_row['temperature'] == '--'
 
 
-def test_scan_forever_retries_after_transient_error_and_recovers():
-    service = module.DashboardService()
+def test_run_loop_retries_after_transient_error_and_recovers():
+    service = module.SensorReader()
     attempts = {'count': 0}
 
-    class FakeStream:
-        def __init__(self, should_fail):
-            self.should_fail = should_fail
-            self._sent = False
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            if self.should_fail:
-                raise RuntimeError('org.bluez.Error.InProgress')
-            if not self._sent:
-                self._sent = True
-                return ('F5:F5:9A:56:D1:4F', {
-                    'temperature': 21.0,
-                    'humidity': 40.0,
-                    'pressure': 1000.0,
-                    'battery': 90,
-                })
-            raise StopAsyncIteration
-
-        async def aclose(self):
-            return None
-
-    def fake_get_data_async(macs):
+    def fake_listen(callback):
         attempts['count'] += 1
-        return FakeStream(should_fail=(attempts['count'] == 1))
+        if attempts['count'] == 1:
+            raise RuntimeError('org.bluez.Error.InProgress')
+        callback(('F5:F5:9A:56:D1:4F', {
+            'temperature': 21.0,
+            'humidity': 40.0,
+            'pressure': 1000.0,
+            'battery': 90,
+        }))
 
-    async def fake_sleep(_seconds):
-        return None
+    original_handle_data = service._handle_data
 
-    original_handle_reading = service._handle_reading
-
-    def handle_reading_then_stop(found_data):
-        original_handle_reading(found_data)
+    def handle_data_then_stop(found_data):
+        original_handle_data(found_data)
         service._stop_event.set()
 
-    service._handle_reading = handle_reading_then_stop
+    service._handle_data = handle_data_then_stop
 
-    with patch.object(dashboard_service_module, 'RuuviTagSensor', create=True) as ruuvi_sensor, \
-            patch.object(dashboard_service_module, 'RUUVITAG_AVAILABLE', True), \
-            patch.object(dashboard_service_module.asyncio, 'sleep', new=fake_sleep):
-        ruuvi_sensor.get_data_async = fake_get_data_async
-        asyncio.run(service._scan_forever())
+    with patch.object(sensor_reader_module, 'RuuviTagSensor', create=True) as ruuvi_sensor, \
+            patch.object(sensor_reader_module, 'RUUVITAG_AVAILABLE', True), \
+            patch.object(sensor_reader_module, '_MIN_BACKOFF_SECONDS', 0.0), \
+            patch.object(sensor_reader_module, '_MAX_BACKOFF_SECONDS', 0.0):
+        ruuvi_sensor.listen = fake_listen
+        service._run_loop()
 
-    assert attempts['count'] == 2
-    with patch.object(dashboard_service_module, 'RUUVITAG_AVAILABLE', True):
+        assert attempts['count'] == 2
         state = service.get_state()
+
     assert state['status'] == 'Live sensor'
     assert state['sensors'][0]['temperature'] == '21.0'
 

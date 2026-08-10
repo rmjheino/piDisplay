@@ -2,15 +2,15 @@ import json
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
-from pidisplay.services.dashboard_service import DashboardService
+from pidisplay.services.sensor_reader import SensorReader
 from pidisplay.services.transit_service import TransitService
 from pidisplay.web.template import build_dashboard_page
 
-_service: DashboardService | None = None
+_service: SensorReader | None = None
 _transit_service: TransitService | None = None
 
 
-def set_services(service: DashboardService, transit_service: TransitService) -> None:
+def set_services(service: SensorReader, transit_service: TransitService) -> None:
     global _service, _transit_service
     _service = service
     _transit_service = transit_service
