@@ -15,28 +15,54 @@ spec.loader.exec_module(module)
 
 
 def test_ruuvi_sensor_configs_include_all_expected_sensors():
-    assert module.RUUVITAG_SENSOR == ('Makuuhuone', 'F5:F5:9A:56:D1:4F')
+    assert module.RUUVITAG_SENSORS == [
+        ('Makuuhuone', 'F5:F5:9A:56:D1:4F'),
+        ('Keittiö', 'C1:33:99:C1:3E:79'),
+        ('Terassi', 'DC:7A:39:53:77:91'),
+    ]
 
 
 def test_collect_ruuvi_state_uses_sensor_label_and_mac():
     service = module.DashboardService()
+    calls = []
 
-    async def fake_get_data_async(macs):
-        assert macs == [module.RUUVITAG_SENSOR[1]]
-        yield ('F5:F5:9A:56:D1:4F', {
+    expected_values = {
+        'F5:F5:9A:56:D1:4F': {
             'temperature': 12.3,
             'humidity': 41.2,
             'pressure': 1012.0,
             'battery': 88,
-        })
+        },
+        'DC:7A:39:53:77:91': {
+            'temperature': 9.1,
+            'humidity': 55.0,
+            'pressure': 1001.2,
+            'battery': 74,
+        },
+    }
+
+    async def fake_get_data_async(macs):
+        assert len(macs) == 1
+        mac = macs[0]
+        calls.append(mac)
+        if mac == 'C1:33:99:C1:3E:79':
+            raise RuntimeError('sensor offline')
+        yield (mac, expected_values[mac])
 
     with patch.object(dashboard_service_module, 'RuuviTagSensor', create=True) as ruuvi_sensor:
         ruuvi_sensor.get_data_async = fake_get_data_async
         state = asyncio.run(service._collect_ruuvi_state())
 
-    assert state['status'] == 'Live sensor'
+    assert calls == [mac for _, mac in module.RUUVITAG_SENSORS]
+    assert state['status'] == 'Partial sensor data'
     assert state['sensor_name'] == 'Makuuhuone'
     assert state['mac'] == 'F5:F5:9A:56:D1:4F'
+    assert len(state['sensors']) == 3
+    assert state['sensors'][0]['name'] == 'Makuuhuone'
+    assert state['sensors'][1]['name'] == 'Keittiö'
+    assert state['sensors'][1]['temperature'] == '--'
+    assert state['sensors'][2]['name'] == 'Terassi'
+    assert state['sensors'][2]['temperature'] == '9.1'
 
 
 def test_dashboard_page_uses_header_panel_without_signal_section():

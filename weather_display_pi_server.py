@@ -8,7 +8,7 @@ from pidisplay.web.handler import DashboardHandler, set_services
 
 
 def main() -> None:
-    port = int(os.environ.get("PORT", "8000"))
+    port = int(os.environ.get("PORT", "8001"))
     server = ThreadingHTTPServer(("0.0.0.0", port), DashboardHandler)
     print(f"Dashboard server running on http://localhost:{port}")
     try:
