@@ -36,7 +36,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 payload["weather"] = _weather_service.get_state()
             self._send_json(payload)
         elif parsed.path == "/api/transit":
-            self._send_json({"departures": _transit_service.get_departures(), "status": _transit_service.get_status()})
+            self._send_json({
+                "departures": _transit_service.get_departures(),
+                "has_alerts": _transit_service.get_has_alerts(),
+                "status": _transit_service.get_status(),
+            })
         else:
             self._send_html(self._build_page())
 

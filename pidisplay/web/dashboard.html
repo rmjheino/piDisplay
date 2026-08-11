@@ -13,25 +13,21 @@
     <div class="grid">
       <section class="panel header-panel">
         <div class="time-box">
-          <div id="clock" class="clock">--:--:--</div>
-          <div id="date" class="date">--</div>
-        </div>
-      </section>
-      <section class="panel departures-panel">
-        <div class="panel-header-row">
-          <div class="tag">Next departures</div>
-          <h3>Merisotilaantori</h3>
-          <img class="hsl-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
-        </div>
-        <div class="transit-table">
-          <div class="transit-row transit-head">
-            <span>Leave from home</span>
+          <div class="time-main">
+            <div id="clock" class="clock">--:--:--</div>
+            <div id="date" class="date">--</div>
           </div>
-          <div id="transit-list" class="transit-table-body">
-            <p class="muted transit-fallback">Loading…</p>
+          <div class="next-leave-wrap">
+            <div class="next-leave-row">
+              <img class="next-leave-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
+              <div class="next-departure-wrap">
+                <strong id="next-departure" class="transit-time">--</strong>
+                <span id="next-departure-alert" class="alert-indicator" hidden aria-label="Route alert" title="Alert on route HSL:1004"></span>
+              </div>
+            </div>
+            <div class="tag">Leave from home</div>
           </div>
         </div>
-        <p id="transit-updated" class="muted"></p>
       </section>
       <section class="panel forecast-panel">
         <div>
@@ -57,9 +53,13 @@
     </div>
   </div>
   <script>
+    const FORCE_TRANSIT_ALERT_INDICATOR = false;
+
     const elements = {
       clock: document.getElementById('clock'),
       date: document.getElementById('date'),
+      nextDeparture: document.getElementById('next-departure'),
+      nextDepartureAlert: document.getElementById('next-departure-alert'),
       sensorTableBody: document.getElementById('sensor-table-body'),
       weatherForecast: document.getElementById('weather-forecast')
     };
@@ -110,7 +110,8 @@
         elements.weatherForecast.innerHTML = '<p class="muted">Unavailable</p>';
         return;
       }
-      const html = hours.map((hour) => `
+      const visibleHours = hours.slice(0, 3);
+      const html = visibleHours.map((hour) => `
         <div class="weather-hour">
           <span class="time">${hour.time || '--'}</span>
           <span>${hour.temperature || '--'}</span>
@@ -161,22 +162,25 @@
       try {
         const resp = await fetch('/api/transit');
         const data = await resp.json();
-        const departures = data.departures;
-        const list = document.getElementById('transit-list');
         if (data.status) {
-          list.innerHTML = `<p class="muted transit-fallback">${data.status}</p>`;
-        } else if (!departures.length) {
-          list.innerHTML = '<p class="muted transit-fallback">No departures available.</p>';
-        } else {
-          list.innerHTML = departures.map((a) => {
-            const departureTime = a.is_realtime ? a.realtime : a.scheduled;
-            const leaveTime = leaveHomeAt(departureTime, 4);
-            return `<div class="transit-row"><strong class="transit-time">${leaveTime}</strong></div>`;
-          }).join('');
+          elements.nextDeparture.textContent = '--';
+          elements.nextDepartureAlert.hidden = true;
+          return;
         }
-        document.getElementById('transit-updated').textContent =
-          'Updated ' + new Date().toLocaleTimeString('en-GB');
+
+        const departures = Array.isArray(data.departures) ? data.departures : [];
+        const hasAlerts = Boolean(data.has_alerts) || FORCE_TRANSIT_ALERT_INDICATOR;
+        const leaveTimes = departures.map((a) => {
+          const departureTime = a.is_realtime ? a.realtime : a.scheduled;
+          return leaveHomeAt(departureTime, 4);
+        }).filter((time) => time !== '--');
+        const nextLeaveTime = leaveTimes[0] || '--';
+
+        elements.nextDeparture.textContent = nextLeaveTime;
+        elements.nextDepartureAlert.hidden = !hasAlerts || nextLeaveTime === '--';
       } catch (e) {
+        elements.nextDeparture.textContent = '--';
+        elements.nextDepartureAlert.hidden = true;
         console.error(e);
       }
     }

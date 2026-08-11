@@ -9,12 +9,14 @@ from urllib.parse import urlencode
 class TransitService:
     _API_URL = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1"
     _STOP_NAME = "Merisotilaantori"
+    _ALERT_ROUTE = "HSL:1004"
 
     def __init__(self, stop_id: str, api_key: str, refresh_seconds: int = 300) -> None:
         self._stop_id = stop_id
         self._api_key = api_key
         self._refresh_seconds = refresh_seconds
         self._departures: list = []
+        self._has_alerts = False
         self._status: str = ""
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -35,6 +37,10 @@ class TransitService:
         with self._lock:
             return list(self._departures)
 
+    def get_has_alerts(self) -> bool:
+        with self._lock:
+            return self._has_alerts
+
     def get_status(self) -> str:
         with self._lock:
             return self._status
@@ -47,6 +53,7 @@ class TransitService:
     def _refresh(self) -> None:
         if not self._api_key:
             with self._lock:
+                self._has_alerts = False
                 self._status = "No API key set (DIGITRANSIT_API_KEY)"
             return
 
@@ -54,13 +61,15 @@ class TransitService:
             if not self._stop_id:
                 self._stop_id = self._resolve_stop_id()
             if self._stop_id:
-                departures = self._fetch_departures()
+                departures, has_alerts = self._fetch_transit_state()
                 with self._lock:
                     self._departures = departures
+                    self._has_alerts = has_alerts
                     self._status = ""
         except Exception as exc:
             print(f"[TransitService] {exc}", flush=True)
             with self._lock:
+                self._has_alerts = False
                 self._status = str(exc)
 
     def _resolve_stop_id(self) -> str:
@@ -73,14 +82,16 @@ class TransitService:
                 return stop["gtfsId"]
         return stops[0]["gtfsId"] if stops else ""
 
-    def _fetch_departures(self) -> list:
+    def _fetch_transit_state(self) -> tuple[list, bool]:
         query = (
             '{ stop(id: "%s") { stoptimesWithoutPatterns(numberOfDepartures: 3) {'
-            " serviceDay scheduledDeparture realtimeDeparture realtime } } }"
-        ) % self._stop_id
+            ' serviceDay scheduledDeparture realtimeDeparture realtime } } '
+            'alerts(route: ["%s"]) { alertDescriptionText } }'
+        ) % (self._stop_id, self._ALERT_ROUTE)
         data = self._graphql(query)
-        stoptimes = data.get("data", {}).get("stop", {}).get("stoptimesWithoutPatterns", [])
-        return [
+        payload = data.get("data", {})
+        stoptimes = payload.get("stop", {}).get("stoptimesWithoutPatterns", [])
+        departures = [
             {
                 "scheduled": self._epoch_hhmm(st["serviceDay"] + st["scheduledDeparture"]),
                 "realtime": self._epoch_hhmm(st["serviceDay"] + st["realtimeDeparture"]),
@@ -88,6 +99,8 @@ class TransitService:
             }
             for st in stoptimes
         ]
+        alerts = payload.get("alerts", [])
+        return departures, bool(alerts)
 
     def _graphql(self, query: str) -> dict:
         payload = json.dumps({"query": query}).encode("utf-8")
