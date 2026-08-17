@@ -11,7 +11,7 @@ class TransitService:
     _STOP_NAME = "Merisotilaantori"
     _ALERT_ROUTE = "HSL:1004"
 
-    def __init__(self, stop_id: str, api_key: str, refresh_seconds: int = 300) -> None:
+    def __init__(self, stop_id: str, api_key: str, refresh_seconds: int = 60) -> None:
         self._stop_id = stop_id
         self._api_key = api_key
         self._refresh_seconds = refresh_seconds

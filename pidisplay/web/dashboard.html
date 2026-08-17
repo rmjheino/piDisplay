@@ -29,25 +29,26 @@
           </div>
         </div>
       </section>
-      <section class="panel forecast-panel">
-        <div>
-          <div class="tag">Helsinki forecast</div>
-          <h3>Weather</h3>
-        </div>
-        <div id="weather-forecast" class="weather-hours">
-          <p class="muted">Loading…</p>
-        </div>
-      </section>
       <section class="panel sensor-panel">
-        <div class="sensor-sections" id="sensor-table-body">
-          <section class="sensor-section sensor-section-placeholder">
-            <h3>Loading sensors…</h3>
-            <div class="sensor-values">
-              <div class="sensor-value">--</div>
-              <div class="sensor-value">--</div>
-              <div class="sensor-value">--</div>
-            </div>
-          </section>
+        <div class="sensor-table-wrap">
+          <table class="sensor-table">
+            <thead>
+              <tr>
+                <th scope="col">Sensor name</th>
+                <th scope="col">Temperature</th>
+                <th scope="col">Humidity</th>
+                <th scope="col">Pressure</th>
+              </tr>
+            </thead>
+            <tbody id="sensor-table-body">
+              <tr class="sensor-row sensor-row-placeholder">
+                <th scope="row">Loading sensors...</th>
+                <td>--</td>
+                <td>--</td>
+                <td>--</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
@@ -60,8 +61,7 @@
       date: document.getElementById('date'),
       nextDeparture: document.getElementById('next-departure'),
       nextDepartureAlert: document.getElementById('next-departure-alert'),
-      sensorTableBody: document.getElementById('sensor-table-body'),
-      weatherForecast: document.getElementById('weather-forecast')
+      sensorTableBody: document.getElementById('sensor-table-body')
     };
 
     function updateClock() {
@@ -74,56 +74,32 @@
       if (!elements.sensorTableBody) {
         return;
       }
-      const sections = (sensors || []).slice(0, 3).map((sensor) => {
+      const rows = (sensors || []).slice(0, 3).map((sensor) => {
         const name = sensor.name || '--';
         const temperature = sensor.temperature || '--';
         const humidity = sensor.humidity || '--';
         const pressure = sensor.pressure || '--';
         return `
-          <section class="sensor-section">
-            <h3>${name}</h3>
-            <div class="sensor-values">
-              <div class="sensor-value">${temperature}</div>
-              <div class="sensor-value">${humidity}</div>
-              <div class="sensor-value">${pressure}</div>
-            </div>
-          </section>
+          <tr class="sensor-row">
+            <th scope="row">${name}</th>
+            <td>${temperature}</td>
+            <td>${humidity}</td>
+            <td>${pressure}</td>
+          </tr>
         `;
       }).join('');
-      elements.sensorTableBody.innerHTML = sections || `
-        <section class="sensor-section sensor-section-placeholder">
-          <h3>No sensors</h3>
-          <div class="sensor-values">
-            <div class="sensor-value">--</div>
-            <div class="sensor-value">--</div>
-            <div class="sensor-value">--</div>
-          </div>
-        </section>
+      elements.sensorTableBody.innerHTML = rows || `
+        <tr class="sensor-row sensor-row-placeholder">
+          <th scope="row">No sensors</th>
+          <td>--</td>
+          <td>--</td>
+          <td>--</td>
+        </tr>
       `;
-    }
-
-    function renderWeather(hours) {
-      if (!elements.weatherForecast) {
-        return;
-      }
-      if (!hours || !hours.length) {
-        elements.weatherForecast.innerHTML = '<p class="muted">Unavailable</p>';
-        return;
-      }
-      const visibleHours = hours.slice(0, 3);
-      const html = visibleHours.map((hour) => `
-        <div class="weather-hour">
-          <span class="time">${hour.time || '--'}</span>
-          <span>${hour.temperature || '--'}</span>
-          <span>${hour.chance_of_rain || '--'}</span>
-        </div>
-      `).join('');
-      elements.weatherForecast.innerHTML = html;
     }
 
     function updateDashboard(data) {
       renderSensorRows(data.sensors || []);
-      renderWeather(data.weather && data.weather.hours ? data.weather.hours : []);
     }
 
     async function refreshData() {

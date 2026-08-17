@@ -27,7 +27,7 @@ body {
   height: min(100%, 1920px);
   display: grid;
   grid-template-columns: 1.2fr 1.8fr;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   gap: 1.5rem;
   flex: 1;
 }
@@ -40,12 +40,8 @@ body {
 }
 .sensor-panel {
   grid-column: 1 / span 2;
-  grid-row: 3;
-  padding: 1rem 1.1rem 1.1rem;
-}
-.forecast-panel {
-  grid-column: 1 / span 2;
   grid-row: 2;
+  padding: 1rem 1.1rem 1.1rem;
 }
 .panel-header-row {
   display: flex;
@@ -133,7 +129,7 @@ body {
   line-height: 1.1;
 }
 .next-leave-wrap .transit-time {
-  font-size: clamp(5.2rem, 10vw, 9.6rem);
+  font-size: clamp(6.24rem, 12vw, 11.52rem);
   font-weight: 700;
   line-height: 1;
   text-align: right;
@@ -153,113 +149,57 @@ body {
 .alert-indicator[hidden] {
   display: none;
 }
-.weather-block {
-  min-width: 320px;
-  flex: 0 0 360px;
-  padding: 1rem 1.1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  background: rgba(255,255,255,0.04);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.weather-hours {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-.weather-hour {
-  display: grid;
-  grid-template-columns: 5ch 6ch 4ch;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.8rem;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.05);
-  font-size: clamp(5.2rem, 10vw, 9.6rem);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.weather-hour .time {
-  color: var(--muted);
-  font-weight: 600;
-  white-space: nowrap;
-  min-width: 0;
-}
-.weather-hour span:nth-child(2) {
-  min-width: 0;
-  white-space: nowrap;
-  text-align: center;
-  justify-self: center;
-}
-.weather-hour span:nth-child(3) {
-  min-width: 0;
-  white-space: nowrap;
-  text-align: right;
-  justify-self: end;
-}
 .clock {
-  font-size: clamp(5.2rem, 10vw, 9.6rem);
+  font-size: clamp(6.24rem, 12vw, 11.52rem);
   font-weight: 700;
   line-height: 1;
 }
 .date {
-  font-size: clamp(2.1rem, 3.8vw, 3.1rem);
+  font-size: clamp(2.52rem, 4.56vw, 3.72rem);
   color: var(--muted);
 }
-.list {
-  display: grid;
-  gap: 0.8rem;
-  margin-top: 1rem;
+.sensor-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.35rem;
 }
-.list div {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 0.4rem;
+.sensor-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+.sensor-table th,
+.sensor-table td {
+  padding: 0.8rem 0.75rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: clamp(1rem, 1.7vw, 1.2rem);
+  text-align: right;
+  white-space: nowrap;
+  font-size: clamp(2.07rem, 3.24vw, 2.79rem);
 }
-.sensor-sections {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.7rem;
-  margin-top: 0;
+.sensor-table th:first-child,
+.sensor-table td:first-child {
+  width: 34%;
+  text-align: left;
 }
-.sensor-section {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 0.2rem 0.1rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
+.sensor-table thead th {
+  color: var(--muted);
+  font-size: clamp(1.53rem, 2.52vw, 1.89rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.sensor-section h3 {
-  font-size: clamp(1.4rem, 2.4vw, 2.2rem);
+.sensor-table tbody th {
+  font-weight: 600;
 }
-.sensor-values {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-.sensor-values div {
-  padding-top: 0.45rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.sensor-values div:first-child {
-  border-top: none;
-  padding-top: 0;
-}
-.sensor-value {
-  display: block;
-  font-size: clamp(1.4rem, 2.4vw, 2.2rem);
+.sensor-table tbody td {
   font-weight: 700;
-  line-height: 1.1;
 }
-.sensor-section-placeholder {
+.sensor-table tbody tr:first-child th,
+.sensor-table tbody tr:first-child td {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.sensor-row-placeholder {
   opacity: 0.75;
 }
 .transit-time {
@@ -291,9 +231,6 @@ body {
   .grid {
     grid-template-columns: 1fr;
   }
-  .forecast-panel {
-    grid-column: 1;
-  }
   .header-panel,
   .sensor-panel {
     grid-column: 1;
@@ -304,11 +241,5 @@ body {
   .next-leave-logo {
     width: 2.8rem;
     height: 2.8rem;
-  }
-  .sensor-sections {
-    grid-template-columns: 1fr;
-  }
-  .weather-hour {
-    grid-template-columns: 5ch 6ch 4ch;
   }
 }
