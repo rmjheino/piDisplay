@@ -11,44 +11,32 @@
 <body>
   <div class="shell">
     <div class="grid">
-      <section class="panel header-panel">
-        <div class="time-box">
-          <div class="time-main">
-            <div id="clock" class="clock">--:--:--</div>
-            <div id="date" class="date">--</div>
-          </div>
-          <div class="next-leave-wrap">
-            <div class="next-leave-row">
-              <img class="next-leave-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
-              <div class="next-departure-wrap">
-                <strong id="next-departure" class="transit-time">--</strong>
-                <span id="next-departure-alert" class="alert-indicator" hidden aria-label="Route alert" title="Alert on route HSL:1004"></span>
-              </div>
-            </div>
-            <div class="tag">Leave from home</div>
+      <section class="panel clock-panel">
+        <div class="date-box">
+          <div id="date" class="date">--</div>
+          <div id="date-weekday" class="date-weekday">--</div>
+        </div>
+        <div id="clock" class="clock">--:--:--</div>
+      </section>
+      <section class="panel transit-panel">
+        <div class="next-leave-row">
+          <img class="next-leave-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
+          <div class="next-departure-wrap">
+            <strong id="next-departure" class="transit-time">--</strong>
+            <span id="next-departure-alert" class="alert-indicator" hidden aria-label="Route alert" title="Alert on route HSL:1004"></span>
           </div>
         </div>
+        <div class="tag">Leave from home</div>
       </section>
       <section class="panel sensor-panel">
-        <div class="sensor-table-wrap">
-          <table class="sensor-table">
-            <thead>
-              <tr>
-                <th scope="col">Sensor name</th>
-                <th scope="col">Temperature</th>
-                <th scope="col">Humidity</th>
-                <th scope="col">Pressure</th>
-              </tr>
-            </thead>
-            <tbody id="sensor-table-body">
-              <tr class="sensor-row sensor-row-placeholder">
-                <th scope="row">Loading sensors...</th>
-                <td>--</td>
-                <td>--</td>
-                <td>--</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="sensor-cards" id="sensor-cards">
+          <div class="sensor-card sensor-card-placeholder">
+            <div class="sensor-temp">99</div>
+            <div class="sensor-sub">
+              <span>99</span>
+              <span>99</span>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -56,50 +44,88 @@
   <script>
     const FORCE_TRANSIT_ALERT_INDICATOR = false;
 
+    const SENSOR_ICONS = {
+      'Makuuhuone': `
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 20v50" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+          <path d="M10 44h14a6 6 0 0 1 6 6v6h48a10 10 0 0 1 10 10v4" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="16" y="36" width="16" height="14" rx="4" stroke="currentColor" stroke-width="6"/>
+          <path d="M10 70v8M88 70v8" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+        </svg>
+      `,
+      'Keittiö': `
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50 30c-16 0-28 13-28 32 0 16 11 30 22 30 4 0 6-2 10-2s6 2 10 2c11 0 22-14 22-30 0-19-12-32-28-32-2 0-4 1-8 3-4-2-6-3-8-3z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+          <path d="M50 30c0-8 4-14 12-18" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+          <path d="M50 22c6-8 16-10 22-8" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `,
+      'Terassi': `
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="20" stroke="currentColor" stroke-width="6"/>
+          <path d="M50 12v-4M50 88v4M12 50h-4M88 50h4M23 23l-3-3M77 23l3-3M23 77l-3 3M77 77l3 3" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+        </svg>
+      `
+    };
+    const DEFAULT_SENSOR_ICON = `
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="6"/>
+      </svg>
+    `;
+
     const elements = {
       clock: document.getElementById('clock'),
       date: document.getElementById('date'),
+      dateWeekday: document.getElementById('date-weekday'),
       nextDeparture: document.getElementById('next-departure'),
       nextDepartureAlert: document.getElementById('next-departure-alert'),
-      sensorTableBody: document.getElementById('sensor-table-body')
+      sensorCards: document.getElementById('sensor-cards')
     };
 
     function updateClock() {
       const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
       elements.clock.textContent = now.toLocaleTimeString('en-GB');
-      elements.date.textContent = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      elements.date.textContent = `${day}.${month}.${year}`;
+      elements.dateWeekday.textContent = now.toLocaleDateString('en-GB', { weekday: 'long' }).slice(0, 2).toUpperCase();
     }
 
-    function renderSensorRows(sensors) {
-      if (!elements.sensorTableBody) {
+    function renderSensorCards(sensors) {
+      if (!elements.sensorCards) {
         return;
       }
-      const rows = (sensors || []).slice(0, 3).map((sensor) => {
+      const cards = (sensors || []).slice(0, 3).map((sensor) => {
         const name = sensor.name || '--';
-        const temperature = sensor.temperature || '--';
-        const humidity = sensor.humidity || '--';
-        const pressure = sensor.pressure || '--';
+        const temperature = sensor.temperature || '99';
+        const humidity = sensor.humidity || '99';
+        const pressure = sensor.pressure || '99';
+        const icon = SENSOR_ICONS[name] || DEFAULT_SENSOR_ICON;
         return `
-          <tr class="sensor-row">
-            <th scope="row">${name}</th>
-            <td>${temperature}</td>
-            <td>${humidity}</td>
-            <td>${pressure}</td>
-          </tr>
+          <div class="sensor-card" title="${name}" aria-label="${name}">
+            <div class="sensor-icon">${icon}</div>
+            <div class="sensor-temp">${temperature}°</div>
+            <div class="sensor-sub">
+              <span>${humidity}%</span>
+              <span>${pressure} hPa</span>
+            </div>
+          </div>
         `;
       }).join('');
-      elements.sensorTableBody.innerHTML = rows || `
-        <tr class="sensor-row sensor-row-placeholder">
-          <th scope="row">No sensors</th>
-          <td>--</td>
-          <td>--</td>
-          <td>--</td>
-        </tr>
+      elements.sensorCards.innerHTML = cards || `
+        <div class="sensor-card sensor-card-placeholder">
+          <div class="sensor-temp">99</div>
+          <div class="sensor-sub">
+            <span>99</span>
+            <span>99</span>
+          </div>
+        </div>
       `;
     }
 
     function updateDashboard(data) {
-      renderSensorRows(data.sensors || []);
+      renderSensorCards(data.sensors || []);
     }
 
     async function refreshData() {
