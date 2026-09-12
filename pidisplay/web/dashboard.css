@@ -106,19 +106,35 @@ body {
 .next-leave-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 0.9rem;
 }
-.next-departure-wrap {
-  position: relative;
-  display: inline-flex;
+.tram-times {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 0.3rem;
+  font-size: clamp(4.1rem, 8.78vw, 6.44rem);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.transit-divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--border);
 }
 .next-leave-logo {
   width: 3.2rem;
   height: 3.2rem;
   object-fit: contain;
   flex: 0 0 auto;
+}
+.next-departure-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
 }
 .transit-panel .tag {
   margin-bottom: 0;
@@ -150,7 +166,7 @@ body {
   display: none;
 }
 .clock {
-  font-size: clamp(6.24rem, 12vw, 11.52rem);
+  font-size: clamp(8.11rem, 15.6vw, 14.98rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -158,7 +174,7 @@ body {
   padding-left: 2rem;
 }
 .date {
-  font-size: clamp(5.25rem, 9.75vw, 8.4rem);
+  font-size: clamp(8.11rem, 15.6vw, 14.98rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -170,12 +186,6 @@ body {
   flex-direction: row;
   align-items: baseline;
   gap: 0.6rem;
-}
-.date-weekday {
-  font-size: clamp(1.53rem, 2.52vw, 1.89rem);
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: 0.06em;
 }
 .sensor-cards {
   display: grid;

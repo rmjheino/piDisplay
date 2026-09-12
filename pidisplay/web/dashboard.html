@@ -14,19 +14,19 @@
       <section class="panel clock-panel">
         <div class="date-box">
           <div id="date" class="date">--</div>
-          <div id="date-weekday" class="date-weekday">--</div>
         </div>
         <div id="clock" class="clock">--:--:--</div>
       </section>
       <section class="panel transit-panel">
         <div class="next-leave-row">
+          <div class="tram-times" id="tram-times"></div>
+          <div class="transit-divider"></div>
           <img class="next-leave-logo" src="{{ HSL_LOGO_SRC }}" alt="HSL logo">
           <div class="next-departure-wrap">
             <strong id="next-departure" class="transit-time">--</strong>
             <span id="next-departure-alert" class="alert-indicator" hidden aria-label="Route alert" title="Alert on route HSL:1004"></span>
           </div>
         </div>
-        <div class="tag">Leave from home</div>
       </section>
       <section class="panel sensor-panel">
         <div class="sensor-cards" id="sensor-cards">
@@ -40,7 +40,6 @@
         </div>
       </section>
     </div>
-  </div>
   <script>
     const FORCE_TRANSIT_ALERT_INDICATOR = false;
 
@@ -76,9 +75,9 @@
     const elements = {
       clock: document.getElementById('clock'),
       date: document.getElementById('date'),
-      dateWeekday: document.getElementById('date-weekday'),
       nextDeparture: document.getElementById('next-departure'),
       nextDepartureAlert: document.getElementById('next-departure-alert'),
+      tramTimes: document.getElementById('tram-times'),
       sensorCards: document.getElementById('sensor-cards')
     };
 
@@ -89,7 +88,6 @@
       const year = now.getFullYear();
       elements.clock.textContent = now.toLocaleTimeString('en-GB');
       elements.date.textContent = `${day}.${month}.${year}`;
-      elements.dateWeekday.textContent = now.toLocaleDateString('en-GB', { weekday: 'long' }).slice(0, 2).toUpperCase();
     }
 
     function renderSensorCards(sensors) {
@@ -143,6 +141,7 @@
     setInterval(updateClock, 1000);
     setInterval(refreshData, 3000);
 
+
     function leaveHomeAt(departureTime, offsetMinutes = 4) {
       const match = /^(\d{1,2}):(\d{2})$/.exec(String(departureTime || ''));
       if (!match) {
@@ -160,6 +159,14 @@
       return `${String(leaveHours).padStart(2, '0')}:${String(leaveMinutes).padStart(2, '0')}`;
     }
 
+    function renderTramTimes(departures) {
+      if (!elements.tramTimes) {
+        return;
+      }
+      const times = departures.slice(0, 2).map((a) => a.is_realtime ? a.realtime : a.scheduled);
+      elements.tramTimes.innerHTML = times.map((time) => `<span>${time}</span>`).join('');
+    }
+
     async function fetchTransit() {
       try {
         const resp = await fetch('/api/transit');
@@ -167,6 +174,7 @@
         if (data.status) {
           elements.nextDeparture.textContent = '--';
           elements.nextDepartureAlert.hidden = true;
+          renderTramTimes([]);
           return;
         }
 
@@ -180,9 +188,11 @@
 
         elements.nextDeparture.textContent = nextLeaveTime;
         elements.nextDepartureAlert.hidden = !hasAlerts || nextLeaveTime === '--';
+        renderTramTimes(departures);
       } catch (e) {
         elements.nextDeparture.textContent = '--';
         elements.nextDepartureAlert.hidden = true;
+        renderTramTimes([]);
         console.error(e);
       }
     }
